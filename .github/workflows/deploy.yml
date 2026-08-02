@@ -30,4 +30,4 @@ jobs:
           npm run build
           
           # Reiniciar el proceso en PM2 (o iniciarlo si no existe)
-          pm2 restart evaluaciones || pm2 start npm --name "evaluaciones" -- run start -- -p 3000
+          pm2 restart evaluaciones || pm2 start npm --name "evaluaciones" -- run start -- -p 3007
