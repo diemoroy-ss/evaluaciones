@@ -1,0 +1,33 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT || 22 }}
+        script: |
+          # Navegar al directorio de la app en el servidor
+          cd /var/www/evaluaciones
+          
+          # Traer los ultimos cambios de GitHub
+          git pull origin main
+          
+          # Instalar dependencias y construir el proyecto Next.js
+          npm install --frozen-lockfile
+          npm run build
+          
+          # Reiniciar el proceso en PM2 (o iniciarlo si no existe)
+          pm2 restart evaluaciones || pm2 start npm --name "evaluaciones" -- run start -- -p 3000
