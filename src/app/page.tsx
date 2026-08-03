@@ -6,6 +6,7 @@ import Calendar from "@/components/Calendar";
 import EvaluationDetailModal from "@/components/EvaluationDetailModal";
 import ScheduleModal from "@/components/ScheduleModal";
 import NotificationDetailModal from "@/components/NotificationDetailModal";
+import HelpModal from "@/components/HelpModal";
 import { 
   Calendar as CalendarIcon, 
   Settings, 
@@ -18,7 +19,8 @@ import {
   AlertCircle,
   WifiOff,
   Clock3,
-  X
+  X,
+  HelpCircle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,6 +38,9 @@ export default function HomePage() {
 
   // Schedule Modal State
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+
+  // Help Modal State
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Selected Evaluation/Notification for Modal
   const [selectedEvaluation, setSelectedEvaluation] = useState<Evaluation | null>(null);
@@ -151,6 +156,15 @@ export default function HomePage() {
         </div>
 
         <div className="header-controls">
+          <button 
+            onClick={() => setIsHelpOpen(true)}
+            className="btn btn-secondary btn-help"
+            title="Ver Tutorial / Ayuda"
+            style={{ padding: "0.5rem", borderRadius: "var(--radius-md)" }}
+          >
+            <HelpCircle size={18} />
+          </button>
+
           <button 
             onClick={() => setIsScheduleOpen(true)}
             className="btn btn-primary btn-schedule-cta"
@@ -333,11 +347,11 @@ export default function HomePage() {
         onClose={() => setSelectedEvaluation(null)}
       />
 
-      {/* Schedule Modal overlay */}
-      <ScheduleModal 
-        isOpen={isScheduleOpen}
-        onClose={() => setIsScheduleOpen(false)}
-      />
+      {/* Schedule Modal */}
+      <ScheduleModal isOpen={isScheduleOpen} onClose={() => setIsScheduleOpen(false)} />
+
+      {/* Help Modal */}
+      <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
 
       {/* Notification Detail Modal overlay */}
       <NotificationDetailModal 
