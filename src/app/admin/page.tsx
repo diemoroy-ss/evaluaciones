@@ -603,12 +603,6 @@ export default function AdminPage() {
           <div>
             <div className="title-row">
               <h2>Dashboard Escolar</h2>
-              {isOffline && (
-                <span className="offline-badge">
-                  <WifiOff size={10} />
-                  <span>Local</span>
-                </span>
-              )}
             </div>
             <span className="badge-admin">Admin Mode</span>
           </div>

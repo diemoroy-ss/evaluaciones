@@ -145,12 +145,6 @@ export default function HomePage() {
           <div>
             <div className="title-row">
               <h1>Control de Evaluaciones</h1>
-              {isOffline && (
-                <span className="offline-badge" title="La conexión con Firestore falló o está inactiva. Usando base de datos local cached.">
-                  <WifiOff size={10} />
-                  <span>Base de Datos Local</span>
-                </span>
-              )}
             </div>
             <span className="brand-subtitle">Colegio Montahue Huechuraba -- Curso 3° Básico</span>
           </div>

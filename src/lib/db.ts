@@ -43,7 +43,7 @@ const EVALUATIONS_COLLECTION = "evaluations";
 const NOTIFICATIONS_COLLECTION = "notifications";
 
 // Timeout Helper
-const TIMEOUT_MS = 2500; // 2.5 seconds timeout to switch to local fallback quickly
+const TIMEOUT_MS = 8000; // 8 seconds timeout to prevent premature fallback
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
