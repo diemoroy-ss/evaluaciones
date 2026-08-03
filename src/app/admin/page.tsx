@@ -8,10 +8,15 @@ import {
   getEvaluations, 
   saveEvaluation, 
   deleteEvaluation, 
+  getNotifications,
+  saveNotification,
+  deleteNotification,
   seedDatabase,
   Subject, 
   Evaluation,
-  isOfflineMode
+  EventNotification,
+  isOfflineMode,
+  uploadFileToStorage
 } from "@/lib/db";
 import { 
   signInWithPopup, 
@@ -34,7 +39,8 @@ import {
   Check, 
   AlertCircle,
   RefreshCw,
-  WifiOff
+  WifiOff,
+  Clock3
 } from "lucide-react";
 import Link from "next/link";
 
@@ -48,7 +54,7 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState("");
 
   // Dashboard Tabs
-  const [activeTab, setActiveTab] = useState<"evaluations" | "subjects" | "settings">("evaluations");
+  const [activeTab, setActiveTab] = useState<"evaluations" | "subjects" | "notifications" | "settings">("evaluations");
 
   // Data State
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -66,6 +72,15 @@ export default function AdminPage() {
     setIsOffline(isOfflineMode);
   }, []);
 
+  // Notification State
+  const [notifications, setNotifications] = useState<EventNotification[]>([]);
+  const [notificationForm, setNotificationForm] = useState<Omit<EventNotification, "id">>({
+    title: "",
+    date: new Date().toISOString().split("T")[0],
+    contents: ""
+  });
+  const [editingNotificationId, setEditingNotificationId] = useState<string | null>(null);
+
   // Subject Form State
   const [subjectForm, setSubjectForm] = useState<Omit<Subject, "id">>({
     name: "",
@@ -78,10 +93,13 @@ export default function AdminPage() {
   const [evaluationForm, setEvaluationForm] = useState<Omit<Evaluation, "id">>({
     subjectId: "",
     date: "",
+    category: "Evaluación",
     type: "Sumativa",
     contents: ""
   });
   const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const defaultColors = [
     { name: "Azul", hex: "#2563eb" },
@@ -133,8 +151,13 @@ export default function AdminPage() {
     try {
       const fetchedSubjects = await getSubjects();
       const fetchedEvaluations = await getEvaluations();
+      // Sort evaluations/activities by date ascending
+      const sortedEvaluations = [...fetchedEvaluations].sort((a, b) => a.date.localeCompare(b.date));
+      
+      const fetchedNotifications = await getNotifications();
       setSubjects(fetchedSubjects);
-      setEvaluations(fetchedEvaluations);
+      setEvaluations(sortedEvaluations);
+      setNotifications(fetchedNotifications);
       
       // Select first subject by default in evaluation form
       if (fetchedSubjects.length > 0 && !evaluationForm.subjectId) {
@@ -152,6 +175,56 @@ export default function AdminPage() {
     setTimeout(() => {
       setStatusMessage(null);
     }, 5000);
+  };
+
+  // Notification CRUD handlers
+  const handleSaveNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notificationForm.title || !notificationForm.contents) {
+      showStatus("error", "Por favor completa el título y los contenidos.");
+      return;
+    }
+
+    setOperationLoading(true);
+    try {
+      await saveNotification(notificationForm, editingNotificationId || undefined);
+      showStatus("success", editingNotificationId ? "Notificación actualizada correctamente." : "Notificación creada correctamente.");
+      
+      // Reset form
+      setNotificationForm({ title: "", date: new Date().toISOString().split("T")[0], contents: "" });
+      setEditingNotificationId(null);
+      
+      // Refresh
+      await fetchData();
+    } catch (error) {
+      showStatus("error", "Error al guardar la notificación.");
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
+  const handleEditNotification = (notif: EventNotification) => {
+    setNotificationForm({
+      title: notif.title,
+      date: notif.date || "",
+      contents: notif.contents
+    });
+    setEditingNotificationId(notif.id);
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta notificación?")) return;
+    
+    setOperationLoading(true);
+    try {
+      await deleteNotification(id);
+      showStatus("success", "Notificación eliminada correctamente.");
+      await fetchData();
+    } catch (error) {
+      showStatus("error", "Error al eliminar la notificación.");
+    } finally {
+      setOperationLoading(false);
+    }
   };
 
   // Google Login Handler
@@ -256,16 +329,37 @@ export default function AdminPage() {
 
     setOperationLoading(true);
     try {
-      await saveEvaluation(evaluationForm, editingEvaluationId || undefined);
+      let finalForm = { ...evaluationForm };
+      
+      if (selectedFile) {
+        setIsUploading(true);
+        try {
+          const { url, name } = await uploadFileToStorage(selectedFile);
+          finalForm.fileUrl = url;
+          finalForm.fileName = name;
+        } catch (uploadErr: any) {
+          showStatus("error", uploadErr.message || "Error al subir archivo.");
+          setOperationLoading(false);
+          setIsUploading(false);
+          return;
+        }
+        setIsUploading(false);
+      }
+
+      await saveEvaluation(finalForm, editingEvaluationId || undefined);
       showStatus("success", editingEvaluationId ? "Evaluación actualizada." : "Evaluación agregada.");
       
       // Reset form
       setEvaluationForm({
         subjectId: subjects[0]?.id || "",
         date: "",
+        category: "Evaluación",
         type: "Sumativa",
-        contents: ""
+        contents: "",
+        fileUrl: undefined,
+        fileName: undefined
       });
+      setSelectedFile(null);
       setEditingEvaluationId(null);
       await fetchData();
     } catch (error) {
@@ -279,9 +373,13 @@ export default function AdminPage() {
     setEvaluationForm({
       subjectId: evalItem.subjectId,
       date: evalItem.date,
+      category: evalItem.category || "Evaluación",
       type: evalItem.type,
-      contents: evalItem.contents
+      contents: evalItem.contents,
+      fileUrl: evalItem.fileUrl,
+      fileName: evalItem.fileName
     });
+    setSelectedFile(null);
     setEditingEvaluationId(evalItem.id);
   };
 
@@ -534,6 +632,14 @@ export default function AdminPage() {
           </button>
 
           <button 
+            className={`nav-link ${activeTab === "notifications" ? "active" : ""}`}
+            onClick={() => { setActiveTab("notifications"); setStatusMessage(null); }}
+          >
+            <Clock3 size={16} />
+            <span>Notificaciones</span>
+          </button>
+
+          <button 
             className={`nav-link ${activeTab === "settings" ? "active" : ""}`}
             onClick={() => { setActiveTab("settings"); setStatusMessage(null); }}
           >
@@ -593,13 +699,20 @@ export default function AdminPage() {
 
                 <div className="form-row">
                   <div className="input-group half">
-                    <label className="input-label">Fecha</label>
-                    <input 
-                      type="date" 
-                      className="input-field"
-                      value={evaluationForm.date}
-                      onChange={(e) => setEvaluationForm({ ...evaluationForm, date: e.target.value })}
-                    />
+                    <label className="input-label">Categoría</label>
+                    <select 
+                      className="input-field select-field"
+                      value={evaluationForm.category || "Evaluación"}
+                      onChange={(e) => setEvaluationForm({ 
+                        ...evaluationForm, 
+                        category: e.target.value as any,
+                        // Reset type based on new category
+                        type: e.target.value === "Evaluación" ? "Sumativa" : "Tarea" 
+                      })}
+                    >
+                      <option value="Evaluación">Evaluación</option>
+                      <option value="Actividad">Actividad</option>
+                    </select>
                   </div>
                   <div className="input-group half">
                     <label className="input-label">Tipo</label>
@@ -608,11 +721,38 @@ export default function AdminPage() {
                       value={evaluationForm.type}
                       onChange={(e) => setEvaluationForm({ ...evaluationForm, type: e.target.value })}
                     >
-                      <option value="Sumativa">Sumativa</option>
-                      <option value="Acumulativa">Acumulativa</option>
-                      <option value="Control">Control</option>
-                      <option value="Prueba">Prueba</option>
+                      {evaluationForm.category === "Actividad" ? (
+                        <>
+                          <option value="Tarea">Tarea</option>
+                          <option value="Materiales">Materiales</option>
+                          <option value="Convivencia">Convivencia</option>
+                          <option value="Reunión">Reunión</option>
+                          <option value="Salida">Salida Terreno</option>
+                          <option value="Actividad">Otra Actividad</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="Sumativa">Sumativa</option>
+                          <option value="Acumulativa">Acumulativa</option>
+                          <option value="Formativa">Formativa</option>
+                          <option value="Control">Control</option>
+                          <option value="Prueba">Prueba</option>
+                          <option value="Diagnóstico">Diagnóstico</option>
+                        </>
+                      )}
                     </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="input-group">
+                    <label className="input-label">Fecha</label>
+                    <input 
+                      type="date" 
+                      className="input-field"
+                      value={evaluationForm.date}
+                      onChange={(e) => setEvaluationForm({ ...evaluationForm, date: e.target.value })}
+                    />
                   </div>
                 </div>
 
@@ -627,6 +767,38 @@ export default function AdminPage() {
                   />
                 </div>
 
+                <div className="input-group">
+                  <label className="input-label">Archivo Adjunto (Opcional)</label>
+                  <input 
+                    type="file" 
+                    className="input-field" 
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setSelectedFile(e.target.files[0]);
+                      } else {
+                        setSelectedFile(null);
+                      }
+                    }}
+                    disabled={isUploading}
+                    style={{ padding: "0.5rem" }}
+                  />
+                  {evaluationForm.fileName && !selectedFile && (
+                    <small style={{ color: "var(--text-muted)", marginTop: "0.5rem", display: "block" }}>
+                      Archivo actual: <a href={evaluationForm.fileUrl} target="_blank" rel="noreferrer" style={{ color: "var(--accent-primary)", textDecoration: "underline" }}>{evaluationForm.fileName}</a>
+                    </small>
+                  )}
+                  {selectedFile && (
+                    <small style={{ color: "var(--text-muted)", marginTop: "0.5rem", display: "block" }}>
+                      Nuevo archivo seleccionado: {selectedFile.name}
+                    </small>
+                  )}
+                  {isUploading && (
+                    <small style={{ color: "var(--accent-primary)", marginTop: "0.5rem", display: "block" }}>
+                      Subiendo archivo... por favor espera.
+                    </small>
+                  )}
+                </div>
+
                 <div className="form-buttons">
                   {editingEvaluationId && (
                     <button 
@@ -637,9 +809,13 @@ export default function AdminPage() {
                         setEvaluationForm({
                           subjectId: subjects[0]?.id || "",
                           date: "",
+                          category: "Evaluación",
                           type: "Sumativa",
-                          contents: ""
+                          contents: "",
+                          fileUrl: undefined,
+                          fileName: undefined
                         });
+                        setSelectedFile(null);
                       }}
                     >
                       Cancelar
@@ -674,11 +850,11 @@ export default function AdminPage() {
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Fecha</th>
-                        <th>Asignatura</th>
-                        <th>Tipo</th>
-                        <th>Contenidos</th>
-                        <th>Acciones</th>
+                        <th style={{ width: '15%' }}>Fecha</th>
+                        <th style={{ width: '20%' }}>Asignatura</th>
+                        <th style={{ width: '15%' }}>Categoría/Tipo</th>
+                        <th style={{ width: '40%' }}>Detalles</th>
+                        <th style={{ width: '10%' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -705,9 +881,14 @@ export default function AdminPage() {
                               </span>
                             </td>
                             <td>
-                              <span className={`type-badge ${ev.type.toLowerCase()}`}>
-                                {ev.type}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                  {ev.category || "Evaluación"}
+                                </span>
+                                <span className={`eval-badge ${ev.type.toLowerCase().replace("ó", "o")}`}>
+                                  {ev.type}
+                                </span>
+                              </div>
                             </td>
                             <td className="contents-cell" title={ev.contents}>
                               {ev.contents.length > 60 ? ev.contents.substring(0, 60) + "..." : ev.contents}
@@ -873,6 +1054,116 @@ export default function AdminPage() {
                                 <Edit size={14} />
                               </button>
                               <button onClick={() => handleDeleteSubject(sub.id)} className="btn-action delete" title="Eliminar">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab content: Notifications */}
+        {activeTab === "notifications" && (
+          <div className="admin-grid animate-scale">
+            {/* Form */}
+            <div className="glass-panel form-panel">
+              <h3>{editingNotificationId ? "Editar Notificación" : "Nueva Notificación"}</h3>
+              <form onSubmit={handleSaveNotification} className="admin-form">
+                <div className="input-group">
+                  <label className="input-label">Título / Asunto</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Ej. Hora del Chocolate 🥯☕" 
+                    value={notificationForm.title}
+                    onChange={(e) => setNotificationForm({ ...notificationForm, title: e.target.value })}
+                  />
+                </div>
+                
+                <div className="input-group">
+                  <label className="input-label">Fecha Principal (Opcional)</label>
+                  <input 
+                    type="date" 
+                    className="input-field" 
+                    value={notificationForm.date}
+                    onChange={(e) => setNotificationForm({ ...notificationForm, date: e.target.value })}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Contenido / Detalles</label>
+                  <textarea 
+                    className="input-field textarea-field" 
+                    rows={10}
+                    placeholder="Escribe el contenido detallado aquí (admite múltiples líneas)..."
+                    value={notificationForm.contents}
+                    onChange={(e) => setNotificationForm({ ...notificationForm, contents: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary" disabled={operationLoading}>
+                    {operationLoading ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                    <span>{editingNotificationId ? "Actualizar" : "Crear"}</span>
+                  </button>
+                  {editingNotificationId && (
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary" 
+                      onClick={() => {
+                        setEditingNotificationId(null);
+                        setNotificationForm({ title: "", date: new Date().toISOString().split("T")[0], contents: "" });
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* List */}
+            <div className="glass-panel table-panel">
+              <h3>Listado de Avisos / Eventos</h3>
+              {notifications.length === 0 ? (
+                <div className="empty-message">No hay avisos registrados.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Título</th>
+                        <th>Fecha</th>
+                        <th>Contenidos</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notifications.map((notif) => (
+                        <tr key={notif.id}>
+                          <td className="font-semibold">{notif.title}</td>
+                          <td className="font-mono text-xs">{notif.date || "-"}</td>
+                          <td className="contents-cell" title={notif.contents}>{notif.contents}</td>
+                          <td>
+                            <div className="action-buttons">
+                              <button 
+                                onClick={() => handleEditNotification(notif)} 
+                                className="btn-action edit"
+                                title="Editar"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteNotification(notif.id)} 
+                                className="btn-action delete"
+                                title="Eliminar"
+                              >
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -1312,6 +1603,10 @@ export default function AdminPage() {
         .type-badge.prueba {
           background: rgba(244, 63, 94, 0.1);
           color: #f43f5e;
+        }
+        .type-badge.reunión, .type-badge.reunion {
+          background: rgba(16, 185, 129, 0.1);
+          color: #10b981;
         }
 
         .contents-cell {

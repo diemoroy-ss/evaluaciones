@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getSubjects, getEvaluations, Subject, Evaluation, isOfflineMode } from "@/lib/db";
+import { getSubjects, getEvaluations, getNotifications, Subject, Evaluation, EventNotification, isOfflineMode } from "@/lib/db";
 import Calendar from "@/components/Calendar";
 import EvaluationDetailModal from "@/components/EvaluationDetailModal";
+import ScheduleModal from "@/components/ScheduleModal";
+import NotificationDetailModal from "@/components/NotificationDetailModal";
 import { 
   Calendar as CalendarIcon, 
   Settings, 
@@ -14,7 +16,9 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  WifiOff
+  WifiOff,
+  Clock3,
+  X
 } from "lucide-react";
 import Link from "next/link";
 
@@ -25,15 +29,20 @@ export default function HomePage() {
   // Data State
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [notifications, setNotifications] = useState<EventNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
 
-  // Selected Evaluation for Modal
+  // Schedule Modal State
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+
+  // Selected Evaluation/Notification for Modal
   const [selectedEvaluation, setSelectedEvaluation] = useState<Evaluation | null>(null);
+  const [selectedNotification, setSelectedNotification] = useState<EventNotification | null>(null);
 
   // Stats
-  const [nextEvaluation, setNextEvaluation] = useState<Evaluation | null>(null);
+  const [nextEvaluation, setNextEvaluation] = useState<Evaluation[] | any>(null);
   const [evalsCountThisMonth, setEvalsCountThisMonth] = useState(0);
 
   // Logo loading helper
@@ -61,9 +70,11 @@ export default function HomePage() {
     try {
       const fetchedSubjects = await getSubjects();
       const fetchedEvaluations = await getEvaluations();
+      const fetchedNotifications = await getNotifications();
       
       setSubjects(fetchedSubjects);
       setEvaluations(fetchedEvaluations);
+      setNotifications(fetchedNotifications);
       
       calculateStats(fetchedEvaluations);
     } catch (err) {
@@ -85,16 +96,21 @@ export default function HomePage() {
 
     const todayStr = new Date().toISOString().split("T")[0];
     
-    // 1. Next upcoming evaluation
+    // 1. Next upcoming evaluation (excluding Actividades)
     const upcoming = evals
-      .filter((ev) => ev.date >= todayStr)
+      .filter((ev) => ev.date >= todayStr && ev.category !== "Actividad")
       .sort((a, b) => a.date.localeCompare(b.date));
     
     setNextEvaluation(upcoming.length > 0 ? upcoming[0] : null);
 
-    // 2. Evaluations this month
+    // 2. Evaluations this month (excluding Actividades and meetings)
     const currentMonthStr = new Date().toISOString().substring(0, 7); // "YYYY-MM"
-    const thisMonth = evals.filter((ev) => ev.date.startsWith(currentMonthStr));
+    const thisMonth = evals.filter((ev) => {
+      const typeLower = ev.type.toLowerCase();
+      const isActivity = ev.category === "Actividad";
+      const isMeeting = typeLower === "reunión" || typeLower === "reunion";
+      return ev.date.startsWith(currentMonthStr) && !isActivity && !isMeeting;
+    });
     setEvalsCountThisMonth(thisMonth.length);
   };
 
@@ -141,6 +157,15 @@ export default function HomePage() {
         </div>
 
         <div className="header-controls">
+          <button 
+            onClick={() => setIsScheduleOpen(true)}
+            className="btn btn-primary btn-schedule-cta"
+            title="Ver Horario de Clases Semanal"
+          >
+            <Clock3 size={16} />
+            <span>Horario</span>
+          </button>
+
           <button 
             onClick={toggleTheme} 
             className="btn-theme" 
@@ -221,25 +246,65 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Widget 2: Count this Month */}
-            <div className="glass-panel stat-card flex-row-card">
-              <div className="card-icon-aside bg-cyan-soft text-cyan">
-                <CalendarIcon size={24} />
+            {/* Widget 2: Otros Eventos / Avisos */}
+            <div className="glass-panel stat-card next-eval-card notifications-card">
+              <div className="stat-card-header">
+                <span className="stat-card-title">Otros Eventos / Avisos</span>
+                <Clock3 className="stat-icon text-accent" size={18} />
               </div>
-              <div className="card-stat-details">
-                <span className="stat-value">{evalsCountThisMonth}</span>
-                <span className="stat-label">Evaluaciones este mes</span>
-              </div>
+              
+              {notifications.length > 0 ? (
+                (() => {
+                  const latestNotif = notifications[0];
+                  
+                  return (
+                    <div className="stat-card-body" onClick={() => setSelectedNotification(latestNotif)}>
+                      <div className="next-eval-meta">
+                        <span className="subject-name" style={{ color: "var(--accent-primary)" }}>{latestNotif.title}</span>
+                      </div>
+                      <p className="next-eval-preview font-mono" style={{ whiteSpace: "pre-line", fontSize: "0.75rem", lineHeight: "1.3", marginTop: "0.25rem", color: "var(--text-secondary)" }}>
+                        {latestNotif.contents.split("\n").slice(0, 4).join("\n")}
+                        {latestNotif.contents.split("\n").length > 4 ? "\n..." : ""}
+                      </p>
+                      <button className="read-more-btn" style={{ marginTop: "auto" }}>
+                        Ver detalles <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="stat-card-body-empty">
+                  No hay notificaciones ni eventos registrados.
+                </div>
+              )}
             </div>
 
-            {/* Widget 3: Total Count */}
-            <div className="glass-panel stat-card flex-row-card">
-              <div className="card-icon-aside bg-indigo-soft text-indigo">
-                <BookOpen size={24} />
+            {/* Widget 3: Resumen Académico (Unified stats) */}
+            <div className="glass-panel stat-card unified-stats-card">
+              <div className="stat-card-header">
+                <span className="stat-card-title">Resumen Académico</span>
+                <BookOpen className="stat-icon text-accent" size={18} />
               </div>
-              <div className="card-stat-details">
-                <span className="stat-value">{evaluations.length}</span>
-                <span className="stat-label">Total programadas</span>
+              <div className="unified-stats-body">
+                <div className="stat-item">
+                  <div className="stat-item-icon bg-cyan-soft text-cyan">
+                    <CalendarIcon size={18} />
+                  </div>
+                  <div className="stat-item-details">
+                    <span className="stat-item-value">{evalsCountThisMonth}</span>
+                    <span className="stat-item-label">Evaluaciones este mes</span>
+                  </div>
+                </div>
+                <div className="stat-item-divider" />
+                <div className="stat-item">
+                  <div className="stat-item-icon bg-indigo-soft text-indigo">
+                    <BookOpen size={18} />
+                  </div>
+                  <div className="stat-item-details">
+                    <span className="stat-item-value">{evaluations.length}</span>
+                    <span className="stat-item-label">Total programadas</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -272,6 +337,18 @@ export default function HomePage() {
         evaluation={selectedEvaluation}
         subjects={subjects}
         onClose={() => setSelectedEvaluation(null)}
+      />
+
+      {/* Schedule Modal overlay */}
+      <ScheduleModal 
+        isOpen={isScheduleOpen}
+        onClose={() => setIsScheduleOpen(false)}
+      />
+
+      {/* Notification Detail Modal overlay */}
+      <NotificationDetailModal 
+        notification={selectedNotification}
+        onClose={() => setSelectedNotification(null)}
       />
 
       <style jsx>{`
@@ -424,7 +501,7 @@ export default function HomePage() {
         /* Stats Row */
         .stats-row {
           display: grid;
-          grid-template-columns: 2fr 1fr 1fr;
+          grid-template-columns: 1.5fr 1.5fr 1fr;
           gap: 1.5rem;
         }
         @media (max-width: 900px) {
@@ -452,6 +529,49 @@ export default function HomePage() {
           text-transform: uppercase;
           letter-spacing: 0.05em;
           color: var(--text-muted);
+        }
+
+        /* Unified stats body layout */
+        .unified-stats-body {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          justify-content: center;
+          flex-grow: 1;
+        }
+        .stat-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        .stat-item-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .stat-item-details {
+          display: flex;
+          flex-direction: column;
+        }
+        .stat-item-value {
+          font-size: 1.35rem;
+          font-weight: 800;
+          line-height: 1.1;
+          color: var(--text-primary);
+        }
+        .stat-item-label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--text-secondary);
+        }
+        .stat-item-divider {
+          height: 1px;
+          background: var(--border-color);
+          width: 100%;
         }
 
         /* Next evaluation specific card */
@@ -601,6 +721,10 @@ export default function HomePage() {
         .type-badge.prueba {
           background: rgba(244, 63, 94, 0.1);
           color: #f43f5e;
+        }
+        .type-badge.reunión, .type-badge.reunion {
+          background: rgba(16, 185, 129, 0.1);
+          color: #10b981;
         }
       `}</style>
     </div>

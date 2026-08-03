@@ -8,7 +8,8 @@ import {
   query, 
   orderBy
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
 
 export interface Subject {
   id: string;
@@ -22,12 +23,24 @@ export interface Evaluation {
   subjectId: string;
   date: string; // format YYYY-MM-DD
   type: "Sumativa" | "Acumulativa" | string;
+  category?: "Evaluación" | "Actividad";
   contents: string; // bullet points/details
+  fileUrl?: string; // Optional attached file URL
+  fileName?: string; // Optional attached file name
+  createdAt?: any;
+}
+
+export interface EventNotification {
+  id: string;
+  title: string;
+  contents: string; // supports multiline list of shares or general message
+  date: string; // YYYY-MM-DD
   createdAt?: any;
 }
 
 const SUBJECTS_COLLECTION = "subjects";
 const EVALUATIONS_COLLECTION = "evaluations";
+const NOTIFICATIONS_COLLECTION = "notifications";
 
 // Timeout Helper
 const TIMEOUT_MS = 2500; // 2.5 seconds timeout to switch to local fallback quickly
@@ -81,7 +94,8 @@ export const DEFAULT_SUBJECTS: Subject[] = [
   { id: "religion", name: "Religión", color: "#06b6d4", colorName: "Celeste" },
   { id: "educacion-fisica", name: "Educación Física", color: "#ea580c", colorName: "Naranjo" },
   { id: "tecnologia", name: "Tecnología", color: "#db2777", colorName: "Rosado" },
-  { id: "artes-visuales", name: "Artes Visuales", color: "#4b5563", colorName: "Gris" }
+  { id: "artes-visuales", name: "Artes Visuales", color: "#4b5563", colorName: "Gris" },
+  { id: "orientacion", name: "Orientación", color: "#64748b", colorName: "Gris Pizarra" }
 ];
 
 export const INITIAL_EVALUATIONS = [
@@ -189,6 +203,59 @@ export const INITIAL_EVALUATIONS = [
     date: "2026-09-04",
     type: "Sumativa",
     contents: "Los estudiantes ejecutan musicograma (polirritmia) y cantan ejercicio de Solfeo de los solfeos 1A Número 18 y 19."
+  },
+  {
+    id: "act-1",
+    subjectId: "ingles",
+    date: "2026-08-03",
+    category: "Actividad",
+    type: "Materiales",
+    contents: "Los estudiantes deberán traer el workbook del 2° semestre ya que se comenzará a utilizar."
+  },
+  {
+    id: "act-2",
+    subjectId: "artes-visuales",
+    date: "2026-08-04",
+    category: "Actividad",
+    type: "Materiales",
+    contents: "Se solicita que los estudiantes tengan sus cotonas para la actividad.\nCada estudiante debe entregar su guía de Tutén terminada."
+  },
+  {
+    id: "act-3",
+    subjectId: "orientacion",
+    date: "2026-08-05",
+    category: "Actividad",
+    type: "Convivencia",
+    contents: "La hora del chocolate: Se solicita traer algo para compartir (considerar 13 niños). Tienen leches de chocolate suficientes para las próximas \"horas del chocolate\"."
+  },
+  {
+    id: "act-4",
+    subjectId: "ingles",
+    date: "2026-08-06",
+    category: "Actividad",
+    type: "Tarea",
+    contents: "Tarea Unit 2, ficha 10, ejercicio 6."
+  }
+];
+
+export const INITIAL_NOTIFICATIONS: EventNotification[] = [
+  {
+    id: "notif-1",
+    title: "Hora del Chocolate 🥯☕",
+    date: "2026-08-05", // Primer compartir de Agosto
+    contents: `Planificación de compartir:
+08.07 - Trini Aliaga
+15.07 - Isi Castillo
+22.07 - Bastián Jiménez
+29.07 - Isi Martinez
+05.08 - León Mendez
+12.08 - Santino Moroni
+19.08 - Thiago Muñoz
+26.08 - Gaspar Rozas
+02.09 - Paloma Silva
+09.09 - Angela Taquides
+16.09 - Elisa Trigo
+23.09 - Leyla Zúñiga`
   }
 ];
 
@@ -197,12 +264,16 @@ const initializeLocalStorageIfEmpty = () => {
   if (!isBrowser) return;
   const subs = localStorage.getItem("local_subjects");
   const evs = localStorage.getItem("local_evaluations");
+  const notifs = localStorage.getItem("local_notifications");
   
   if (!subs) {
     setLocalData("local_subjects", DEFAULT_SUBJECTS);
   }
   if (!evs) {
     setLocalData("local_evaluations", INITIAL_EVALUATIONS);
+  }
+  if (!notifs) {
+    setLocalData("local_notifications", INITIAL_NOTIFICATIONS);
   }
 };
 
@@ -351,11 +422,81 @@ export async function deleteEvaluation(id: string): Promise<void> {
   }
 }
 
+// --- Notification CRUD ---
+export async function getNotifications(): Promise<EventNotification[]> {
+  if (isOfflineMode) {
+    return getLocalData<EventNotification>("local_notifications");
+  }
+
+  try {
+    const q = query(collection(db, NOTIFICATIONS_COLLECTION), orderBy("date", "asc"));
+    const querySnapshot = await withTimeout(getDocs(q), TIMEOUT_MS);
+    const notifications: EventNotification[] = [];
+    querySnapshot.forEach((doc) => {
+      notifications.push({ id: doc.id, ...doc.data() } as EventNotification);
+    });
+    // Cache locally
+    setLocalData("local_notifications", notifications);
+    return notifications;
+  } catch (error) {
+    console.warn("Firestore connection failed. Falling back to LocalStorage.", error);
+    setOfflineMode(true);
+    return getLocalData<EventNotification>("local_notifications");
+  }
+}
+
+export async function saveNotification(notification: Omit<EventNotification, "id">, id?: string): Promise<string> {
+  const generatedId = id || Math.random().toString(36).substring(2, 9);
+  const fullNotification: EventNotification = { id: generatedId, ...notification };
+
+  // Always update LocalStorage
+  const localNotifs = getLocalData<EventNotification>("local_notifications");
+  const idx = localNotifs.findIndex(n => n.id === generatedId);
+  if (idx >= 0) {
+    localNotifs[idx] = fullNotification;
+  } else {
+    localNotifs.push(fullNotification);
+  }
+  setLocalData("local_notifications", localNotifs);
+
+  if (isOfflineMode) {
+    return generatedId;
+  }
+
+  try {
+    const docRef = doc(db, NOTIFICATIONS_COLLECTION, generatedId);
+    await withTimeout(setDoc(docRef, notification, { merge: true }), TIMEOUT_MS);
+    return generatedId;
+  } catch (error) {
+    console.warn("Firestore write failed, saved locally", error);
+    setOfflineMode(true);
+    return generatedId;
+  }
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  // Always update LocalStorage
+  const localNotifs = getLocalData<EventNotification>("local_notifications");
+  setLocalData("local_notifications", localNotifs.filter(n => n.id !== id));
+
+  if (isOfflineMode) {
+    return;
+  }
+
+  try {
+    await withTimeout(deleteDoc(doc(db, NOTIFICATIONS_COLLECTION, id)), TIMEOUT_MS);
+  } catch (error) {
+    console.warn("Firestore delete failed, updated locally", error);
+    setOfflineMode(true);
+  }
+}
+
 // --- Seeding Script ---
 export async function seedDatabase(): Promise<void> {
   // Seed LocalStorage
   setLocalData("local_subjects", DEFAULT_SUBJECTS);
   setLocalData("local_evaluations", INITIAL_EVALUATIONS);
+  setLocalData("local_notifications", INITIAL_NOTIFICATIONS);
 
   if (isOfflineMode) {
     console.log("LocalStorage seeded successfully.");
@@ -385,11 +526,50 @@ export async function seedDatabase(): Promise<void> {
         createdAt: new Date().toISOString()
       }), TIMEOUT_MS);
     }
+
+    // Clear and seed notifications in Firestore
+    const notifRefs = await withTimeout(getDocs(collection(db, NOTIFICATIONS_COLLECTION)), TIMEOUT_MS);
+    for (const d of notifRefs.docs) {
+      await withTimeout(deleteDoc(doc(db, NOTIFICATIONS_COLLECTION, d.id)), TIMEOUT_MS);
+    }
+
+    for (const notif of INITIAL_NOTIFICATIONS) {
+      const docRef = doc(db, NOTIFICATIONS_COLLECTION, notif.id);
+      await withTimeout(setDoc(docRef, {
+        title: notif.title,
+        date: notif.date,
+        contents: notif.contents,
+        createdAt: new Date().toISOString()
+      }), TIMEOUT_MS);
+    }
     
     console.log("Firestore and LocalStorage seeded successfully!");
   } catch (error) {
     console.warn("Firestore seed failed, local seed completed", error);
     setOfflineMode(true);
     throw error;
+  }
+}
+
+// --- File Upload Helper ---
+export async function uploadFileToStorage(file: File): Promise<{ url: string; name: string }> {
+  // Removido el check de isOfflineMode: 
+  // Permitimos intentar subir a Storage independientemente del estado de Firestore,
+  // ya que puede que Firestore esté offline pero la conexión a internet sí funcione.
+  try {
+    // Generate a unique filename to prevent overwrites
+    const uniqueFileName = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `uploads/${uniqueFileName}`);
+    
+    await uploadBytes(storageRef, file);
+    const downloadUrl = await getDownloadURL(storageRef);
+    
+    return {
+      url: downloadUrl,
+      name: file.name
+    };
+  } catch (error) {
+    console.error("Error al subir archivo a Firebase Storage:", error);
+    throw new Error("Error al subir el archivo. Verifica tu conexión a internet.");
   }
 }

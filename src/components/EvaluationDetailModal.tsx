@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { Evaluation, Subject } from "@/lib/db";
-import { X, Calendar as CalendarIcon, BookOpen, Layers } from "lucide-react";
+import { X, Calendar as CalendarIcon, BookOpen, Layers, Download } from "lucide-react";
 
 interface EvaluationDetailModalProps {
   evaluation: Evaluation | null;
@@ -151,6 +151,35 @@ export default function EvaluationDetailModal({ evaluation, subjects, onClose }:
               {renderContents(evaluation.contents)}
             </div>
           </div>
+
+          {evaluation.fileUrl && (
+            <div className="contents-section" style={{ marginTop: "1rem" }}>
+              <h4 className="section-title">Archivo Adjunto</h4>
+              <a 
+                href={evaluation.fileUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="file-download-btn"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.75rem 1rem",
+                  backgroundColor: "var(--bg-glass-lighter)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  textDecoration: "none",
+                  fontWeight: "500",
+                  fontSize: "0.9rem",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                <Download size={18} style={{ color: color }} />
+                <span>{evaluation.fileName || "Descargar Archivo"}</span>
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Footer section */}
@@ -329,6 +358,15 @@ export default function EvaluationDetailModal({ evaluation, subjects, onClose }:
         [data-theme="dark"] .type-badge.prueba {
           background: rgba(248, 113, 113, 0.15);
           color: #fca5a5;
+        }
+        .type-badge.reunión, .type-badge.reunion {
+          background: rgba(16, 185, 129, 0.12);
+          color: #059669;
+          border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        [data-theme="dark"] .type-badge.reunión, [data-theme="dark"] .type-badge.reunion {
+          background: rgba(52, 211, 153, 0.15);
+          color: #6ee7b7;
         }
 
         /* Contents Section */

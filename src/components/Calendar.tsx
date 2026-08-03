@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Subject, Evaluation } from "@/lib/db";
-import { ChevronLeft, ChevronRight, Filter, Calendar as CalendarIcon, List, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, Calendar as CalendarIcon, List, Eye, Paperclip } from "lucide-react";
 
 interface CalendarProps {
   subjects: Subject[];
@@ -16,11 +16,22 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
   
   // Filtering State
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
 
   // Selected Day for Mobile View
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+
+  // Dark mode detection
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.getAttribute("data-theme") === "dark");
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Smart Initial Date setting (open on the month of the first evaluation)
   useEffect(() => {
@@ -64,8 +75,9 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
   // Filter Evaluations
   const filteredEvaluations = evaluations.filter((ev) => {
     const matchSubject = selectedSubjectId === "all" || ev.subjectId === selectedSubjectId;
+    const matchCategory = selectedCategory === "all" || (ev.category || "Evaluación") === selectedCategory;
     const matchType = selectedType === "all" || ev.type === selectedType;
-    return matchSubject && matchType;
+    return matchSubject && matchCategory && matchType;
   });
 
   // Check if a day is today
@@ -145,14 +157,51 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
 
           <select 
             className="filter-select"
+            value={selectedCategory}
+            onChange={(e) => {
+              setSelectedCategory(e.target.value);
+              setSelectedType("all"); // Reset type filter when category changes
+            }}
+          >
+            <option value="all">Todas las Categorías</option>
+            <option value="Evaluación">Evaluaciones</option>
+            <option value="Actividad">Actividades</option>
+          </select>
+
+          <select 
+            className="filter-select"
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
           >
             <option value="all">Todos los Tipos</option>
-            <option value="Sumativa">Sumativas</option>
-            <option value="Acumulativa">Acumulativas</option>
-            <option value="Control">Controles</option>
-            <option value="Prueba">Pruebas</option>
+            {selectedCategory === "Actividad" ? (
+              <>
+                <option value="Tarea">Tareas</option>
+                <option value="Materiales">Materiales</option>
+                <option value="Convivencia">Convivencia</option>
+                <option value="Reunión">Reuniones</option>
+                <option value="Salida">Salidas</option>
+                <option value="Actividad">Otras Actividades</option>
+              </>
+            ) : selectedCategory === "Evaluación" ? (
+              <>
+                <option value="Sumativa">Sumativas</option>
+                <option value="Acumulativa">Acumulativas</option>
+                <option value="Formativa">Formativas</option>
+                <option value="Control">Controles</option>
+                <option value="Prueba">Pruebas</option>
+              </>
+            ) : (
+              <>
+                <option value="Sumativa">Sumativas</option>
+                <option value="Acumulativa">Acumulativas</option>
+                <option value="Control">Controles</option>
+                <option value="Prueba">Pruebas</option>
+                <option value="Tarea">Tareas</option>
+                <option value="Materiales">Materiales</option>
+                <option value="Reunión">Reuniones</option>
+              </>
+            )}
           </select>
         </div>
 
@@ -234,16 +283,19 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
                             className="cell-eval-card"
                             style={{ 
                               borderLeftColor: subject?.color || "#94a3b8",
-                              backgroundColor: `${subject?.color || "#94a3b8"}15`,
-                              color: subject?.color || "inherit"
+                              backgroundColor: `${subject?.color || "#94a3b8"}${isDark ? "40" : "18"}`,
+                              color: isDark ? "#f0f4ff" : (subject?.color || "inherit")
                             }}
                             onClick={(e) => {
-                              e.stopPropagation(); // Avoid triggering day select
+                              e.stopPropagation();
                               onSelectEvaluation(ev);
                             }}
                           >
                             <span className="eval-sub-name">{subject?.name || "Asignatura"}</span>
-                            <span className="eval-sub-type">{ev.type}</span>
+                            <span className="eval-sub-type" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {ev.type}
+                              {ev.fileUrl && <Paperclip size={10} />}
+                            </span>
                           </div>
                         );
                       })}
@@ -304,8 +356,9 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
                           <span className="subject-name" style={{ color: subject?.color }}>
                             {subject?.name}
                           </span>
-                          <span className={`type-badge ${ev.type.toLowerCase()}`}>
+                          <span className={`type-badge ${ev.type.toLowerCase()}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                             {ev.type}
+                            {ev.fileUrl && <Paperclip size={12} />}
                           </span>
                         </div>
                         <p className="mobile-card-preview">
@@ -355,8 +408,9 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
                         <span className="agenda-subject" style={{ color: subject?.color }}>
                           {subject?.name}
                         </span>
-                        <span className={`type-badge ${ev.type.toLowerCase()}`}>
+                        <span className={`type-badge ${ev.type.toLowerCase()}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           {ev.type}
+                          {ev.fileUrl && <Paperclip size={12} />}
                         </span>
                         <span className="agenda-date-full">
                           {formattedDate}
@@ -555,7 +609,8 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
           min-height: 110px;
         }
         [data-theme="dark"] .day-cell {
-          background: rgba(255, 255, 255, 0.01);
+          background: rgba(255, 255, 255, 0.035);
+          border-color: rgba(99, 112, 138, 0.3);
         }
         .day-cell:hover {
           border-color: var(--text-muted);
@@ -637,6 +692,10 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
           font-size: 0.6rem;
           opacity: 0.75;
           text-transform: uppercase;
+        }
+        [data-theme="dark"] .cell-eval-card {
+          border-width: 2px;
+          border-left-width: 3px;
         }
         .more-evals-indicator {
           font-size: 0.65rem;
@@ -781,6 +840,10 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
         .type-badge.prueba {
           background: rgba(244, 63, 94, 0.1);
           color: #f43f5e;
+        }
+        .type-badge.reunión, .type-badge.reunion {
+          background: rgba(16, 185, 129, 0.1);
+          color: #10b981;
         }
 
         /* Agenda / List Mode View */
