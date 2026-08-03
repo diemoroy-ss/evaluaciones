@@ -359,6 +359,11 @@ export default function HomePage() {
         onClose={() => setSelectedNotification(null)}
       />
 
+      {/* Footer */}
+      <footer className="main-footer">
+        Hecho con ❤️ por <a href="https://santisoft.cl" target="_blank" rel="noopener noreferrer">santisoft.cl</a>
+      </footer>
+
       <style jsx>{`
         .app-container {
           max-width: 1400px;
@@ -743,6 +748,23 @@ export default function HomePage() {
             padding: 0.5rem 0.75rem;
             font-size: 0.75rem;
           }
+        }
+        .main-footer {
+          text-align: center;
+          margin-top: auto;
+          padding: 2rem 1rem 1rem;
+          font-size: 0.85rem;
+          color: var(--text-muted);
+        }
+        .main-footer a {
+          color: var(--accent-primary);
+          text-decoration: none;
+          font-weight: 600;
+          transition: opacity var(--transition-fast);
+        }
+        .main-footer a:hover {
+          opacity: 0.8;
+          text-decoration: underline;
         }
       `}</style>
     </div>
