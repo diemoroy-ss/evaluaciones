@@ -63,6 +63,13 @@ export default function AdminPage() {
   const [operationLoading, setOperationLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Month filter for evaluations
+  const [evalFilterMonth, setEvalFilterMonth] = useState<string>(() => {
+    // Default to current month padded string (e.g. "08")
+    const now = new Date();
+    return String(now.getMonth() + 1).padStart(2, "0");
+  });
+
   // Logo helper
   const [logoLoaded, setLogoLoaded] = useState(false);
 
@@ -829,7 +836,29 @@ export default function AdminPage() {
 
             {/* List Column */}
             <div className="glass-panel list-panel">
-              <h3>Historial de Evaluaciones ({evaluations.length})</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0 }}>Historial de Evaluaciones</h3>
+                <select 
+                  className="input-field" 
+                  style={{ width: 'auto', padding: '0.4rem 2rem 0.4rem 1rem' }}
+                  value={evalFilterMonth}
+                  onChange={(e) => setEvalFilterMonth(e.target.value)}
+                >
+                  <option value="all">Todos los meses</option>
+                  <option value="01">Enero</option>
+                  <option value="02">Febrero</option>
+                  <option value="03">Marzo</option>
+                  <option value="04">Abril</option>
+                  <option value="05">Mayo</option>
+                  <option value="06">Junio</option>
+                  <option value="07">Julio</option>
+                  <option value="08">Agosto</option>
+                  <option value="09">Septiembre</option>
+                  <option value="10">Octubre</option>
+                  <option value="11">Noviembre</option>
+                  <option value="12">Diciembre</option>
+                </select>
+              </div>
               {loading ? (
                 <div className="table-loader">
                   <Loader2 className="animate-spin text-accent" size={32} />
@@ -852,7 +881,13 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {evaluations.map((ev) => {
+                      {evaluations
+                        .filter(ev => {
+                          if (evalFilterMonth === "all") return true;
+                          const month = ev.date.split("-")[1];
+                          return month === evalFilterMonth;
+                        })
+                        .map((ev) => {
                         const subject = subjects.find(s => s.id === ev.subjectId);
                         // Format date
                         const [year, month, day] = ev.date.split("-");
