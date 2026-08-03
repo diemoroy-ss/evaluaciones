@@ -383,8 +383,10 @@ export default function ScheduleModal({ isOpen, onClose }: ScheduleModalProps) {
         .schedule-table-wrapper {
           width: 100%;
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           border-radius: var(--radius-md);
           border: 1px solid var(--border-color);
+          position: relative;
         }
 
         .schedule-table {

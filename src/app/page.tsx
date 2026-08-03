@@ -726,6 +726,16 @@ export default function HomePage() {
           background: rgba(16, 185, 129, 0.1);
           color: #10b981;
         }
+        @media (max-width: 640px) {
+          .header-controls {
+            flex-wrap: wrap;
+            justify-content: center;
+          }
+          .btn-schedule-cta, .btn-admin-link {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+          }
+        }
       `}</style>
     </div>
   );

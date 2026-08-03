@@ -333,13 +333,13 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
                   Evaluaciones del {selectedDay.getDate()} de {months[selectedDay.getMonth()]}
                 </h4>
                 <span className="evals-count-badge">
-                  {selectedDayEvals.length} {selectedDayEvals.length === 1 ? "evaluación" : "evaluaciones"}
+                  {selectedDayEvals.length} {selectedDayEvals.length === 1 ? "registro" : "registros"}
                 </span>
               </div>
 
               {selectedDayEvals.length === 0 ? (
                 <div className="panel-empty-state">
-                  No hay evaluaciones programadas para este día.
+                  No hay eventos programados para este día.
                 </div>
               ) : (
                 <div className="panel-evals-list">
@@ -381,7 +381,7 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
           <h3>Próximas Evaluaciones ({filteredEvaluations.length})</h3>
           {filteredEvaluations.length === 0 ? (
             <div className="agenda-empty">
-              No hay evaluaciones que coincidan con los filtros seleccionados.
+              No hay eventos que coincidan con los filtros seleccionados.
             </div>
           ) : (
             <div className="agenda-list">
@@ -731,6 +731,7 @@ export default function Calendar({ subjects, evaluations, onSelectEvaluation }: 
           }
         }
         .mobile-dot {
+          display: block;
           width: 6px;
           height: 6px;
           border-radius: 50%;
