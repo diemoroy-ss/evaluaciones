@@ -304,6 +304,16 @@ export async function getSubjects(): Promise<Subject[]> {
   }
 }
 
+function sanitizeFirestoreData<T extends object>(data: T): Record<string, any> {
+  const cleanData: Record<string, any> = {};
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined) {
+      cleanData[key] = value;
+    }
+  });
+  return cleanData;
+}
+
 export async function saveSubject(subject: Omit<Subject, "id">, id?: string): Promise<string> {
   const generatedId = id || subject.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-");
   const fullSubject: Subject = { id: generatedId, ...subject };
@@ -320,7 +330,7 @@ export async function saveSubject(subject: Omit<Subject, "id">, id?: string): Pr
 
   try {
     const docRef = doc(db, SUBJECTS_COLLECTION, generatedId);
-    await withTimeout(setDoc(docRef, subject, { merge: true }), TIMEOUT_MS);
+    await withTimeout(setDoc(docRef, sanitizeFirestoreData(subject), { merge: true }), TIMEOUT_MS);
     setOfflineMode(false);
     return generatedId;
   } catch (error) {
@@ -384,7 +394,7 @@ export async function saveEvaluation(evaluation: Omit<Evaluation, "id">, id?: st
 
   try {
     const docRef = doc(db, EVALUATIONS_COLLECTION, generatedId);
-    await withTimeout(setDoc(docRef, evaluation, { merge: true }), TIMEOUT_MS);
+    await withTimeout(setDoc(docRef, sanitizeFirestoreData(evaluation), { merge: true }), TIMEOUT_MS);
     setOfflineMode(false);
     return generatedId;
   } catch (error) {
@@ -442,13 +452,10 @@ export async function saveNotification(notification: Omit<EventNotification, "id
   }
   setLocalData("local_notifications", localNotifs);
 
-  if (isOfflineMode) {
-    return generatedId;
-  }
-
   try {
     const docRef = doc(db, NOTIFICATIONS_COLLECTION, generatedId);
-    await withTimeout(setDoc(docRef, notification, { merge: true }), TIMEOUT_MS);
+    await withTimeout(setDoc(docRef, sanitizeFirestoreData(notification), { merge: true }), TIMEOUT_MS);
+    setOfflineMode(false);
     return generatedId;
   } catch (error) {
     console.warn("Firestore write failed, saved locally", error);
