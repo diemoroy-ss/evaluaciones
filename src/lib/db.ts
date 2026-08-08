@@ -75,12 +75,12 @@ export let isOfflineMode = false;
 export function setOfflineMode(value: boolean) {
   isOfflineMode = value;
   if (isBrowser) {
-    localStorage.setItem("db_offline_mode", value ? "true" : "false");
+    if (value) {
+      localStorage.setItem("db_offline_mode", "true");
+    } else {
+      localStorage.removeItem("db_offline_mode");
+    }
   }
-}
-
-if (isBrowser) {
-  isOfflineMode = localStorage.getItem("db_offline_mode") === "true";
 }
 
 // Initial Data templates
@@ -282,10 +282,6 @@ initializeLocalStorageIfEmpty();
 
 // --- Subject CRUD ---
 export async function getSubjects(): Promise<Subject[]> {
-  if (isOfflineMode) {
-    return getLocalData<Subject>("local_subjects");
-  }
-
   try {
     const q = query(collection(db, SUBJECTS_COLLECTION), orderBy("name", "asc"));
     const querySnapshot = await withTimeout(getDocs(q), TIMEOUT_MS);
@@ -293,8 +289,9 @@ export async function getSubjects(): Promise<Subject[]> {
     querySnapshot.forEach((doc) => {
       subjects.push({ id: doc.id, ...doc.data() } as Subject);
     });
-    // Cache locally
+    // Cache locally & clear offline mode
     setLocalData("local_subjects", subjects);
+    setOfflineMode(false);
     return subjects;
   } catch (error) {
     console.warn("Firestore connection failed. Falling back to LocalStorage.", error);
@@ -317,13 +314,10 @@ export async function saveSubject(subject: Omit<Subject, "id">, id?: string): Pr
   }
   setLocalData("local_subjects", localSubjects);
 
-  if (isOfflineMode) {
-    return generatedId;
-  }
-
   try {
     const docRef = doc(db, SUBJECTS_COLLECTION, generatedId);
     await withTimeout(setDoc(docRef, subject, { merge: true }), TIMEOUT_MS);
+    setOfflineMode(false);
     return generatedId;
   } catch (error) {
     console.warn("Firestore write failed, saved locally", error);
@@ -341,12 +335,9 @@ export async function deleteSubject(id: string): Promise<void> {
   const localEvals = getLocalData<Evaluation>("local_evaluations");
   setLocalData("local_evaluations", localEvals.filter(e => e.subjectId !== id));
 
-  if (isOfflineMode) {
-    return;
-  }
-
   try {
     await withTimeout(deleteDoc(doc(db, SUBJECTS_COLLECTION, id)), TIMEOUT_MS);
+    setOfflineMode(false);
   } catch (error) {
     console.warn("Firestore delete failed, updated locally", error);
     setOfflineMode(true);
@@ -355,10 +346,6 @@ export async function deleteSubject(id: string): Promise<void> {
 
 // --- Evaluation CRUD ---
 export async function getEvaluations(): Promise<Evaluation[]> {
-  if (isOfflineMode) {
-    return getLocalData<Evaluation>("local_evaluations");
-  }
-
   try {
     const q = query(collection(db, EVALUATIONS_COLLECTION), orderBy("date", "asc"));
     const querySnapshot = await withTimeout(getDocs(q), TIMEOUT_MS);
@@ -366,8 +353,9 @@ export async function getEvaluations(): Promise<Evaluation[]> {
     querySnapshot.forEach((doc) => {
       evaluations.push({ id: doc.id, ...doc.data() } as Evaluation);
     });
-    // Cache locally
+    // Cache locally & clear offline mode
     setLocalData("local_evaluations", evaluations);
+    setOfflineMode(false);
     return evaluations;
   } catch (error) {
     console.warn("Firestore connection failed. Falling back to LocalStorage.", error);
@@ -390,13 +378,10 @@ export async function saveEvaluation(evaluation: Omit<Evaluation, "id">, id?: st
   }
   setLocalData("local_evaluations", localEvals);
 
-  if (isOfflineMode) {
-    return generatedId;
-  }
-
   try {
     const docRef = doc(db, EVALUATIONS_COLLECTION, generatedId);
     await withTimeout(setDoc(docRef, evaluation, { merge: true }), TIMEOUT_MS);
+    setOfflineMode(false);
     return generatedId;
   } catch (error) {
     console.warn("Firestore write failed, saved locally", error);
@@ -410,12 +395,9 @@ export async function deleteEvaluation(id: string): Promise<void> {
   const localEvals = getLocalData<Evaluation>("local_evaluations");
   setLocalData("local_evaluations", localEvals.filter(e => e.id !== id));
 
-  if (isOfflineMode) {
-    return;
-  }
-
   try {
     await withTimeout(deleteDoc(doc(db, EVALUATIONS_COLLECTION, id)), TIMEOUT_MS);
+    setOfflineMode(false);
   } catch (error) {
     console.warn("Firestore delete failed, updated locally", error);
     setOfflineMode(true);
@@ -424,10 +406,6 @@ export async function deleteEvaluation(id: string): Promise<void> {
 
 // --- Notification CRUD ---
 export async function getNotifications(): Promise<EventNotification[]> {
-  if (isOfflineMode) {
-    return getLocalData<EventNotification>("local_notifications");
-  }
-
   try {
     const q = query(collection(db, NOTIFICATIONS_COLLECTION), orderBy("date", "asc"));
     const querySnapshot = await withTimeout(getDocs(q), TIMEOUT_MS);
@@ -435,8 +413,9 @@ export async function getNotifications(): Promise<EventNotification[]> {
     querySnapshot.forEach((doc) => {
       notifications.push({ id: doc.id, ...doc.data() } as EventNotification);
     });
-    // Cache locally
+    // Cache locally & clear offline mode
     setLocalData("local_notifications", notifications);
+    setOfflineMode(false);
     return notifications;
   } catch (error) {
     console.warn("Firestore connection failed. Falling back to LocalStorage.", error);
