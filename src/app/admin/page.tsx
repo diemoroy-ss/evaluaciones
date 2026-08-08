@@ -156,12 +156,15 @@ export default function AdminPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const fetchedSubjects = await getSubjects();
-      const fetchedEvaluations = await getEvaluations();
+      const [fetchedSubjects, fetchedEvaluations, fetchedNotifications] = await Promise.all([
+        getSubjects(),
+        getEvaluations(),
+        getNotifications()
+      ]);
+
       // Sort evaluations/activities by date ascending
       const sortedEvaluations = [...fetchedEvaluations].sort((a, b) => a.date.localeCompare(b.date));
       
-      const fetchedNotifications = await getNotifications();
       setSubjects(fetchedSubjects);
       setEvaluations(sortedEvaluations);
       setNotifications(fetchedNotifications);

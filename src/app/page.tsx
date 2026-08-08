@@ -1,7 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getSubjects, getEvaluations, getNotifications, Subject, Evaluation, EventNotification, isOfflineMode } from "@/lib/db";
+import { 
+  getSubjects, 
+  getEvaluations, 
+  getNotifications, 
+  getCachedSubjects,
+  getCachedEvaluations,
+  getCachedNotifications,
+  Subject, 
+  Evaluation, 
+  EventNotification, 
+  isOfflineMode 
+} from "@/lib/db";
 import Calendar from "@/components/Calendar";
 import EvaluationDetailModal from "@/components/EvaluationDetailModal";
 import ScheduleModal from "@/components/ScheduleModal";
@@ -62,20 +73,33 @@ export default function HomePage() {
     setTheme(initialTheme);
     document.documentElement.setAttribute("data-theme", initialTheme);
 
-    // 2. Fetch Data
+    // 2. Instant Local Cache Render (Stale-While-Revalidate)
+    const cachedSubs = getCachedSubjects();
+    const cachedEvals = getCachedEvaluations();
+    const cachedNotifs = getCachedNotifications();
+    if (cachedSubs.length > 0 || cachedEvals.length > 0) {
+      setSubjects(cachedSubs);
+      setEvaluations(cachedEvals);
+      setNotifications(cachedNotifs);
+      calculateStats(cachedEvals);
+      setLoading(false);
+    }
+
+    // 3. Background Fetch Data from Firestore
     fetchData();
 
-    // 3. Set offline state on mount to avoid hydration mismatch
+    // 4. Set offline state on mount to avoid hydration mismatch
     setIsOffline(isOfflineMode);
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
     setError(null);
     try {
-      const fetchedSubjects = await getSubjects();
-      const fetchedEvaluations = await getEvaluations();
-      const fetchedNotifications = await getNotifications();
+      const [fetchedSubjects, fetchedEvaluations, fetchedNotifications] = await Promise.all([
+        getSubjects(),
+        getEvaluations(),
+        getNotifications()
+      ]);
       
       setSubjects(fetchedSubjects);
       setEvaluations(fetchedEvaluations);
@@ -87,7 +111,6 @@ export default function HomePage() {
       setError("No se pudo conectar a la base de datos de Firebase.");
     } finally {
       setLoading(false);
-      // Double check offline mode state after loading completes
       setIsOffline(isOfflineMode);
     }
   };

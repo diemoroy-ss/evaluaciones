@@ -43,7 +43,7 @@ const EVALUATIONS_COLLECTION = "evaluations";
 const NOTIFICATIONS_COLLECTION = "notifications";
 
 // Timeout Helper
-const TIMEOUT_MS = 8000; // 8 seconds timeout to prevent premature fallback
+const TIMEOUT_MS = 3500; // 3.5 seconds timeout to prevent long loading delays
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
@@ -58,16 +58,20 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 const isBrowser = typeof window !== "undefined";
 
 // Cache/Local DB helper
-const getLocalData = <T>(key: string): T[] => {
+export const getLocalData = <T>(key: string): T[] => {
   if (!isBrowser) return [];
   const data = localStorage.getItem(key);
   return data ? JSON.parse(data) : [];
 };
 
-const setLocalData = <T>(key: string, data: T[]): void => {
+export const setLocalData = <T>(key: string, data: T[]): void => {
   if (!isBrowser) return;
   localStorage.setItem(key, JSON.stringify(data));
 };
+
+export const getCachedSubjects = (): Subject[] => getLocalData<Subject>("local_subjects");
+export const getCachedEvaluations = (): Evaluation[] => getLocalData<Evaluation>("local_evaluations");
+export const getCachedNotifications = (): EventNotification[] => getLocalData<EventNotification>("local_notifications");
 
 // Global indicator for offline mode
 export let isOfflineMode = false;
